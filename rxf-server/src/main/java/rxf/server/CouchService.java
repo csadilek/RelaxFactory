@@ -1,8 +1,11 @@
 package rxf.server;
 
+import rxf.server.driver.CouchMetaDriver;
 import rxf.server.gen.CouchDriver.DocDelete;
 import rxf.server.gen.CouchDriver.DocFetch;
 import rxf.server.gen.CouchDriver.JsonSend;
+
+import com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -57,8 +60,9 @@ public interface CouchService<E> {
 
     public AttachmentsImpl(String db, E entity) throws NoSuchFieldException, IllegalAccessException {
       this.entity = entity;
-      rev = (String) entity.getClass().getField("_rev").get(entity);
-      id = (String) entity.getClass().getField("_id").get(entity);
+      JsonObject obj = CouchMetaDriver.gson().toJsonTree(entity).getAsJsonObject();
+      rev = obj.get("_rev").getAsString();
+      id = obj.get("_id").getAsString();
       this.db = db;
     }
 
