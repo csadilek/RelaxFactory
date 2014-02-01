@@ -74,8 +74,10 @@ public interface CouchService<E> {
 
     @Override
     public CouchTx addAttachment(String content, String fileName, String contentType) {
-      return JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
-          .to().fire().tx();
+      CouchTx tx = JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
+              .to().fire().tx();
+      rev = tx.rev();
+      return tx;
     }
 
     @Override
@@ -89,6 +91,7 @@ public interface CouchService<E> {
           if (!tx.ok()) {
             throw new IOException(tx.error());
           }
+          rev = tx.rev();
         }
       };
     }
@@ -101,8 +104,10 @@ public interface CouchService<E> {
 
     @Override
     public CouchTx updateAttachment(String content, String fileName, String contentType) {
-      return JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
-          .to().fire().tx();
+      CouchTx tx = JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
+              .to().fire().tx();
+      rev = tx.rev();
+      return tx;
     }
 
     @Override
@@ -116,6 +121,7 @@ public interface CouchService<E> {
           if (!tx.ok()) {
             throw new IOException(tx.error());
           }
+          rev = tx.rev();
         }
       };
     }
@@ -127,7 +133,9 @@ public interface CouchService<E> {
 
     @Override
     public CouchTx deleteAttachment(String fileName) {
-      return DocDelete.$().db(db).docId(id + "/" + fileName).to().fire().tx();
+      CouchTx tx = DocDelete.$().db(db).docId(id + "/" + fileName).to().fire().tx();
+      rev = tx.rev();
+      return tx;
     }
   }
 

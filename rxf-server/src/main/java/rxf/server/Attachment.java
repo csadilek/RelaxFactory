@@ -1,15 +1,14 @@
 package rxf.server;
 
-import com.google.gson.annotations.Expose;
-import com.google.gson.annotations.SerializedName;
-
 public class Attachment {
 
-  @Expose(serialize = false)
+//  @Expose(serialize = false)
   private long length;
 
-  @SerializedName("content_type")
+//  @SerializedName("content_type")
   private String contentType;
+
+  private boolean stub;
 
   public long getLength() {
     return length;
