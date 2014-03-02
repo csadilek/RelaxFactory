@@ -4,6 +4,7 @@ import rxf.server.driver.CouchMetaDriver;
 import rxf.server.gen.CouchDriver.DocDelete;
 import rxf.server.gen.CouchDriver.DocFetch;
 import rxf.server.gen.CouchDriver.JsonSend;
+import rxf.server.gen.CouchDriver.JsonSend.JsonSendActionBuilder;
 
 import com.google.gson.JsonObject;
 
@@ -16,6 +17,8 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+
+import one.xio.HttpHeaders;
 
 /**
  * Declares a generated service that can be implemented automatically by CouchServiceFactory.
@@ -74,8 +77,11 @@ public interface CouchService<E> {
 
     @Override
     public CouchTx addAttachment(String content, String fileName, String contentType) {
-      CouchTx tx = JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
-              .to().fire().tx();
+      JsonSendActionBuilder actionBuilder =
+          JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
+              .to();
+      actionBuilder.state().headerString(HttpHeaders.Content$2dType, contentType);
+      CouchTx tx = actionBuilder.fire().tx();
       rev = tx.rev();
       return tx;
     }
@@ -104,7 +110,8 @@ public interface CouchService<E> {
 
     @Override
     public CouchTx updateAttachment(String content, String fileName, String contentType) {
-      CouchTx tx = JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
+      CouchTx tx =
+          JsonSend.$().opaque(db + "/" + id + "/" + fileName + "?rev=" + rev).validjson(content)
               .to().fire().tx();
       rev = tx.rev();
       return tx;
