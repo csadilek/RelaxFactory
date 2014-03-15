@@ -1,20 +1,26 @@
 package rxf.server.driver;
 
-import com.google.gson.FieldNamingPolicy;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import one.xio.AsioVisitor.Impl;
 import one.xio.HttpHeaders;
 import one.xio.HttpMethod;
 import one.xio.HttpStatus;
 import one.xio.MimeType;
-import org.intellij.lang.annotations.Language;
-import rxf.server.*;
+import rxf.server.ActionBuilder;
+import rxf.server.BlobAntiPatternObject;
+import rxf.server.DbKeysBuilder;
+import rxf.server.DbTerminal;
+import rxf.server.Rfc822HeaderState;
 import rxf.server.Rfc822HeaderState.HttpRequest;
 import rxf.server.Rfc822HeaderState.HttpResponse;
 import rxf.server.an.DbKeys;
 import rxf.server.an.DbKeys.etype;
 import rxf.server.an.DbTask;
+
+import com.google.gson.FieldNamingPolicy;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import org.intellij.lang.annotations.Language;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -22,7 +28,11 @@ import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
@@ -30,12 +40,51 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static java.nio.channels.SelectionKey.*;
-import static one.xio.HttpHeaders.*;
-import static one.xio.HttpMethod.*;
-import static rxf.server.BlobAntiPatternObject.*;
-import static rxf.server.DbTerminal.*;
-import static rxf.server.an.DbKeys.etype.*;
+import static java.nio.channels.SelectionKey.OP_CONNECT;
+import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.channels.SelectionKey.OP_WRITE;
+import static one.xio.HttpHeaders.Accept;
+import static one.xio.HttpHeaders.Content$2dEncoding;
+import static one.xio.HttpHeaders.Content$2dLength;
+import static one.xio.HttpHeaders.Content$2dType;
+import static one.xio.HttpHeaders.ETag;
+import static one.xio.HttpHeaders.Expect;
+import static one.xio.HttpHeaders.Transfer$2dEncoding;
+import static one.xio.HttpMethod.DELETE;
+import static one.xio.HttpMethod.GET;
+import static one.xio.HttpMethod.HEAD;
+import static one.xio.HttpMethod.POST;
+import static one.xio.HttpMethod.PUT;
+import static one.xio.HttpMethod.UTF8;
+import static one.xio.HttpMethod.enqueue;
+import static rxf.server.BlobAntiPatternObject.DEBUG_SENDJSON;
+import static rxf.server.BlobAntiPatternObject.EXECUTOR_SERVICE;
+import static rxf.server.BlobAntiPatternObject.arrToString;
+import static rxf.server.BlobAntiPatternObject.createCouchConnection;
+import static rxf.server.BlobAntiPatternObject.deepToString;
+import static rxf.server.BlobAntiPatternObject.getReceiveBufferSize;
+import static rxf.server.BlobAntiPatternObject.isDEBUG_SENDJSON;
+import static rxf.server.BlobAntiPatternObject.recycleChannel;
+import static rxf.server.DbTerminal.continuousFeed;
+import static rxf.server.DbTerminal.future;
+import static rxf.server.DbTerminal.json;
+import static rxf.server.DbTerminal.oneWay;
+import static rxf.server.DbTerminal.pojo;
+import static rxf.server.DbTerminal.rows;
+import static rxf.server.DbTerminal.tx;
+import static rxf.server.an.DbKeys.etype.attachname;
+import static rxf.server.an.DbKeys.etype.blob;
+import static rxf.server.an.DbKeys.etype.db;
+import static rxf.server.an.DbKeys.etype.designDocId;
+import static rxf.server.an.DbKeys.etype.docId;
+import static rxf.server.an.DbKeys.etype.keyType;
+import static rxf.server.an.DbKeys.etype.mimetype;
+import static rxf.server.an.DbKeys.etype.mimetypeEnum;
+import static rxf.server.an.DbKeys.etype.opaque;
+import static rxf.server.an.DbKeys.etype.rev;
+import static rxf.server.an.DbKeys.etype.type;
+import static rxf.server.an.DbKeys.etype.validjson;
+import static rxf.server.an.DbKeys.etype.view;
 
 /**
  * confers traits on an oo platform...
@@ -54,8 +103,10 @@ import static rxf.server.an.DbKeys.etype.*;
  * </ol>
  * <p/>
  * <p/>
- * to() - setup the request: provide early access to the header state to tweak whatever you want. This can then be used after fire() to read out the header state from the response
- * fire() - execution of the visitor, access to results, future, (errors?). If results is null, check error. If you use future, its your own damn problem
+ * <ul>DSEL addendum:
+ * <li>to() - setup the request: provide early access to the header state to tweak whatever you want. This can then be used after fire() to read out the header state from the response
+ * <li> fire() - execution of the visitor, access to results, future, (errors?). If results is null, check error. If you use future, its your own damn problem
+ * </ul>
  * User: jim
  * Date: 5/24/12
  * Time: 3:09 PM
@@ -706,10 +757,13 @@ public enum CouchMetaDriver {
         public void onRead(SelectionKey key) throws IOException {
           if (null == cursor) {
             //geometric,  vulnerable to dev/null if not max'd here.
-            header =
-                null == header ? ByteBuffer.allocateDirect(getReceiveBufferSize()) : header
-                    .hasRemaining() ? header : ByteBuffer.allocateDirect(header.capacity() * 2)
-                    .put((ByteBuffer) header.flip());
+            if (null == header)
+              header = ByteBuffer.allocateDirect(getReceiveBufferSize());
+            else if (header.hasRemaining())
+              header = header;
+            else
+              header =
+                  ByteBuffer.allocateDirect(header.capacity() * 2).put((ByteBuffer) header.flip());
 
             int read = channel.read(header);
             ByteBuffer flip = (ByteBuffer) header.duplicate().flip();
