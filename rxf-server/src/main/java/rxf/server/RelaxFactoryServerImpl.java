@@ -68,7 +68,7 @@ public class RelaxFactoryServerImpl implements RelaxFactoryServer {
     assert this.topLevel == null && this.serverSocketChannel == null : "Can't call init twice";
     this.topLevel = topLevel;
     this.setPort(port);
-    this.hostname = InetAddress.getByName(hostname);
+    this.hostname = InetAddress.getByName("127.7.119.1");
   }
 
   @Override
@@ -78,7 +78,9 @@ public class RelaxFactoryServerImpl implements RelaxFactoryServer {
     isRunning = true;
     try {
       serverSocketChannel = ServerSocketChannel.open();
-      InetSocketAddress addr = new InetSocketAddress(hostname, getPort());
+      port = 15001;
+      System.out.println("Binding to + " + hostname + ":" + port);
+      InetSocketAddress addr = new InetSocketAddress(hostname, port);
       serverSocketChannel.socket().bind(addr);
       setPort(serverSocketChannel.socket().getLocalPort());
       System.out.println(hostname.getHostAddress() + ":" + getPort());
